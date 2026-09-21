@@ -1,3 +1,10 @@
+"""
+Script de auditoria e revisão automatizada de alterações PBIP/TMDL/PBIR.
+
+Compara duas árvores de arquivos de projetos Power BI (base vs head) e gera
+um relatório detalhado em Markdown para documentação em Pull Requests.
+"""
+
 import argparse
 import json
 import re
@@ -13,9 +20,9 @@ IGNORED_PATH_PATTERNS = [
 ]
 
 
-# Keys that PBIP/PBIR auto-rotates on save or that are otherwise meaningless to a
-# reviewer. Stripped before JSON diffing so the summary stays focused on real
-# changes. Applied only to JSON files; TMDL and M parsers handle their own noise.
+# Chaves que o PBIP/PBIR rotaciona automaticamente ao salvar ou que não agregam valor
+# à revisão humana. São removidas antes do diff JSON para manter o foco em alterações
+# reais. Aplica-se apenas a arquivos JSON; parsers de TMDL e M tratam seus próprios ruídos.
 IGNORED_KEYS = {
     "lastModified",
     "modifiedTime",
@@ -31,18 +38,18 @@ IGNORED_KEYS = {
 }
 
 
-# Populated by compare_projects: page "name" (hash-like ID used in
-# activePageName) -> human-readable displayName, across base and head.
+# Preenchido por compare_projects: "name" da página (ID tipo hash usado em
+# activePageName) -> displayName legível, abrangendo base e head.
 _PAGE_NAME_LOOKUP: Dict[str, str] = {}
 
-# Populated by main() from CLI args; used to build markdown links to
-# the file diff inside the PR. Empty when run locally.
+# Preenchido por main() a partir dos argumentos CLI; usado para gerar links markdown
+# para o diff do arquivo dentro do PR. Vazio quando executado localmente.
 _LINK_CONTEXT: Dict[str, str] = {"repo_url": "", "head_sha": "", "pr_number": ""}
 
 
 def file_link(path: str) -> str:
-    """Return a small markdown link icon to the file's diff in the PR
-    (or its blob view if no PR context). Empty string if no repo URL."""
+    """Retorna um ícone de link markdown para o diff do arquivo no PR
+    (ou visualização blob se não houver contexto de PR). Retorna string vazia se não houver URL."""
     import hashlib
     from urllib.parse import quote
 
@@ -143,67 +150,67 @@ def summarize_value(value: Any) -> str:
     return text
 
 
-# Map known PBIP JSON path prefixes to plain-English labels so reviewers don't
-# have to know the schema. Longest prefix wins.
+# Mapeia prefixos conhecidos de caminhos JSON do PBIP para rótulos legíveis em português.
+# O prefixo mais longo tem precedência.
 PBIP_PATH_LABELS: List[Tuple[str, str]] = [
-    # Field role assignments (these are visual-type specific role buckets)
-    ("visual.query.queryState.Values", "Values field"),
-    ("visual.query.queryState.Y", "Y-axis field"),
-    ("visual.query.queryState.X", "X-axis field"),
-    ("visual.query.queryState.Category", "Category field"),
-    ("visual.query.queryState.Rows", "Pivot rows"),
-    ("visual.query.queryState.Columns", "Pivot columns"),
-    ("visual.query.queryState.Tooltips", "Tooltip fields"),
-    ("visual.query.queryState.Legend", "Legend field"),
-    ("visual.query.queryState.Group", "Group field"),
-    ("visual.query.queryState.Series", "Series field"),
-    ("visual.query.queryState.Size", "Size field"),
-    ("visual.query.queryState.Details", "Details field"),
-    ("visual.query.queryState.Axis", "Axis field"),
-    ("visual.query.queryState", "Field role assignments"),
-    ("visual.query.sortDefinition", "Sort order"),
-    ("visual.query", "Visual data query"),
-    # Formatting blocks (visual.objects.* are formatting; visualContainerObjects.* are container effects)
-    ("visual.objects.categoryLabels", "Category labels formatting"),
-    ("visual.objects.dataLabels", "Data labels formatting"),
-    ("visual.objects.title", "Title formatting"),
-    ("visual.objects.background", "Background formatting"),
-    ("visual.objects.subTotals", "Subtotals formatting"),
-    ("visual.objects.rowHeaders", "Row headers formatting"),
-    ("visual.objects.columnHeaders", "Column headers formatting"),
-    ("visual.objects.legend", "Legend formatting"),
-    ("visual.objects.labels", "Labels formatting"),
-    ("visual.objects.values", "Values formatting"),
-    ("visual.objects.general", "General settings"),
-    ("visual.objects.plotArea", "Plot area formatting"),
-    ("visual.objects.dataPoint", "Data point formatting"),
-    ("visual.objects.lineStyles", "Line styles formatting"),
-    ("visual.objects", "All visual formatting"),
-    ("visual.visualContainerObjects.dropShadow", "Drop shadow effect"),
-    ("visual.visualContainerObjects.background", "Container background"),
-    ("visual.visualContainerObjects.border", "Container border"),
-    ("visual.visualContainerObjects.title", "Container title"),
-    ("visual.visualContainerObjects", "Container effects"),
-    # Position / layout
-    ("visual.position.x", "Visual X position"),
-    ("visual.position.y", "Visual Y position"),
-    ("visual.position.width", "Visual width"),
-    ("visual.position.height", "Visual height"),
-    ("visual.position.z", "Visual Z order"),
-    ("visual.position", "Visual position"),
-    # Other top-level visual properties
-    ("visual.expansionStates", "Hierarchy expansion state"),
-    ("visual.visualType", "Visual type"),
-    ("visual.drillFilterOtherVisuals", "Drill: filter other visuals"),
-    ("visual.howCreated", "Visual creation source"),
-    # Top-level (page/report-level)
-    ("filterConfig", "Visual-level filters"),
-    ("howCreated", "Creation source"),
+    # Atribuições de campos do visual (áreas/compartimentos específicos por tipo de visual)
+    ("visual.query.queryState.Values", "Campo de Valores"),
+    ("visual.query.queryState.Y", "Campo do Eixo Y"),
+    ("visual.query.queryState.X", "Campo do Eixo X"),
+    ("visual.query.queryState.Category", "Campo de Categoria"),
+    ("visual.query.queryState.Rows", "Linhas da Matriz"),
+    ("visual.query.queryState.Columns", "Colunas da Matriz"),
+    ("visual.query.queryState.Tooltips", "Campos de Dica de Ferramenta (Tooltip)"),
+    ("visual.query.queryState.Legend", "Campo de Legenda"),
+    ("visual.query.queryState.Group", "Campo de Grupo"),
+    ("visual.query.queryState.Series", "Campo de Séries"),
+    ("visual.query.queryState.Size", "Campo de Tamanho"),
+    ("visual.query.queryState.Details", "Campo de Detalhes"),
+    ("visual.query.queryState.Axis", "Campo de Eixo"),
+    ("visual.query.queryState", "Atribuições de campos do visual"),
+    ("visual.query.sortDefinition", "Ordem de classificação"),
+    ("visual.query", "Consulta de dados do visual"),
+    # Blocos de formatação (visual.objects.* são formatação visual; visualContainerObjects.* são efeitos do contêiner)
+    ("visual.objects.categoryLabels", "Formatação de rótulos de categoria"),
+    ("visual.objects.dataLabels", "Formatação de rótulos de dados"),
+    ("visual.objects.title", "Formatação de título"),
+    ("visual.objects.background", "Formatação de plano de fundo"),
+    ("visual.objects.subTotals", "Formatação de subtotais"),
+    ("visual.objects.rowHeaders", "Formatação de cabeçalhos de linha"),
+    ("visual.objects.columnHeaders", "Formatação de cabeçalhos de coluna"),
+    ("visual.objects.legend", "Formatação de legenda"),
+    ("visual.objects.labels", "Formatação de rótulos"),
+    ("visual.objects.values", "Formatação de valores"),
+    ("visual.objects.general", "Configurações gerais"),
+    ("visual.objects.plotArea", "Formatação da área de plotagem"),
+    ("visual.objects.dataPoint", "Formatação de pontos de dados"),
+    ("visual.objects.lineStyles", "Formatação de estilo de linha"),
+    ("visual.objects", "Toda a formatação do visual"),
+    ("visual.visualContainerObjects.dropShadow", "Efeito de sombra projetada"),
+    ("visual.visualContainerObjects.background", "Plano de fundo do contêiner"),
+    ("visual.visualContainerObjects.border", "Borda do contêiner"),
+    ("visual.visualContainerObjects.title", "Título do contêiner"),
+    ("visual.visualContainerObjects", "Efeitos do contêiner"),
+    # Posição e layout
+    ("visual.position.x", "Posição X do visual"),
+    ("visual.position.y", "Posição Y do visual"),
+    ("visual.position.width", "Largura do visual"),
+    ("visual.position.height", "Altura do visual"),
+    ("visual.position.z", "Ordem Z (camada) do visual"),
+    ("visual.position", "Posição do visual"),
+    # Outras propriedades de nível superior do visual
+    ("visual.expansionStates", "Estado de expansão da hierarquia"),
+    ("visual.visualType", "Tipo de visual"),
+    ("visual.drillFilterOtherVisuals", "Drill: filtrar outros visuais"),
+    ("visual.howCreated", "Origem de criação do visual"),
+    # Nível superior (página/relatório)
+    ("filterConfig", "Filtros no nível do visual"),
+    ("howCreated", "Origem de criação"),
 ]
 
 
 def humanize_path(path: str) -> Optional[str]:
-    """Map a PBIP JSON path to a friendly label. Returns None if unknown."""
+    """Mapeia um caminho JSON PBIP para um rótulo amigável. Retorna None se desconhecido."""
     matches = [
         (prefix, label)
         for prefix, label in PBIP_PATH_LABELS
@@ -236,7 +243,7 @@ def _projection_field_names(projections: Any) -> List[str]:
 
 
 def _field_reference_label(value: Any) -> Optional[str]:
-    """Return a compact field label from nested PBIP query expressions."""
+    """Retorna um rótulo de campo compacto a partir de expressões aninhadas do PBIP."""
     if not isinstance(value, dict):
         return None
 
@@ -282,19 +289,19 @@ def _find_nested_value(value: Any, key: str) -> Optional[str]:
 
 
 ROLE_LABELS: Dict[str, str] = {
-    "Values": "Values",
-    "Y": "Y-axis",
-    "X": "X-axis",
-    "Category": "Category",
-    "Rows": "Rows",
-    "Columns": "Columns",
-    "Tooltips": "Tooltips",
-    "Legend": "Legend",
-    "Group": "Group",
-    "Series": "Series",
-    "Size": "Size",
-    "Details": "Details",
-    "Axis": "Axis",
+    "Values": "Valores",
+    "Y": "Eixo Y",
+    "X": "Eixo X",
+    "Category": "Categoria",
+    "Rows": "Linhas",
+    "Columns": "Colunas",
+    "Tooltips": "Dicas de Ferramenta",
+    "Legend": "Legenda",
+    "Group": "Grupo",
+    "Series": "Séries",
+    "Size": "Tamanho",
+    "Details": "Detalhes",
+    "Axis": "Eixo",
 }
 
 
@@ -314,10 +321,10 @@ def describe_added_list_item(path: str, value: Any) -> Optional[str]:
     if role:
         names = _projection_field_names([value])
         if names:
-            return f"Added field to {role}: {', '.join(names)}"
-        return f"Added field to {role}"
+            return f"Campo adicionado a {role}: {', '.join(names)}"
+        return f"Campo adicionado a {role}"
 
-    return f"Added list item: {path} = {summarize_value(value)}"
+    return f"Item de lista adicionado: {path} = {summarize_value(value)}"
 
 
 def describe_removed_list_item(path: str, value: Any) -> Optional[str]:
@@ -328,15 +335,15 @@ def describe_removed_list_item(path: str, value: Any) -> Optional[str]:
     if role:
         names = _projection_field_names([value])
         if names:
-            return f"Removed field from {role}: {', '.join(names)}"
-        return f"Removed field from {role}"
+            return f"Campo removido de {role}: {', '.join(names)}"
+        return f"Campo removido de {role}"
 
-    return f"Removed list item: {path}"
+    return f"Item de lista removido: {path}"
 
 
 def summarize_pbip_value(path: str, value: Any) -> Optional[str]:
-    """Extract a human-readable summary for known PBIP path/value combinations."""
-    # queryState role: visual.query.queryState.<Role> -> field names
+    """Extrai um resumo legível para combinações conhecidas de caminho/valor do PBIP."""
+    # Papel em queryState: visual.query.queryState.<Role> -> nomes dos campos
     if re.match(r"^visual\.query\.queryState\.[A-Za-z]\w*$", path):
         if isinstance(value, dict):
             names = _projection_field_names(value.get("projections"))
@@ -344,7 +351,7 @@ def summarize_pbip_value(path: str, value: Any) -> Optional[str]:
                 return ", ".join(names)
         return None
 
-    # sortDefinition -> "<field> (<direction>)"
+    # sortDefinition -> "<campo> (<direção>)"
     if path == "visual.query.sortDefinition":
         if isinstance(value, dict):
             sorts = value.get("sort")
@@ -368,7 +375,7 @@ def summarize_pbip_value(path: str, value: Any) -> Optional[str]:
                     return ", ".join(pieces)
         return None
 
-    # visual.objects -> list immediate formatting keys (e.g. "categoryLabels, dataLabels")
+    # visual.objects -> lista chaves imediatas de formatação (ex: "categoryLabels, dataLabels")
     if path == "visual.objects" or path == "visual.visualContainerObjects":
         if isinstance(value, dict):
             keys = list(value.keys())
@@ -376,7 +383,7 @@ def summarize_pbip_value(path: str, value: Any) -> Optional[str]:
                 return ", ".join(keys)
         return None
 
-    # filterConfig -> "<N> filters: <names>"
+    # filterConfig -> "<N> filtros: <nomes>"
     if path == "filterConfig":
         if isinstance(value, dict):
             filters = value.get("filters")
@@ -397,9 +404,9 @@ def summarize_pbip_value(path: str, value: Any) -> Optional[str]:
                 count = len(filters)
                 if field_names:
                     preview = ", ".join(field_names[:5])
-                    suffix = f" (+{len(field_names) - 5} more)" if len(field_names) > 5 else ""
-                    return f"{count} filter(s): {preview}{suffix}"
-                return f"{count} filter(s)"
+                    suffix = f" (+{len(field_names) - 5} adicionais)" if len(field_names) > 5 else ""
+                    return f"{count} filtro(s): {preview}{suffix}"
+                return f"{count} filtro(s)"
         return None
 
     return None
@@ -412,27 +419,27 @@ def _friendly_path_label(path: str) -> Optional[str]:
     return None
 
 
-# Power BI expressions are discriminated unions: a node like `expr` carries
-# exactly one variant key (Literal, ThemeDataColor, Aggregation, ...).
-# When a user switches a color from a theme palette pick to a custom hex,
-# the variant flips entirely — naive diffing reports "added Literal" plus
-# "removed ThemeDataColor". We collapse that to one readable change.
+# Expressões do Power BI são discriminated unions: um nó como `expr` contém
+# exatamente uma chave de variante (Literal, ThemeDataColor, Aggregation, ...).
+# Quando um usuário troca uma cor da paleta do tema por um hexadecimal customizado,
+# a variante muda por completo — um diff ingênuo reportaria "adicionado Literal" e
+# "removido ThemeDataColor". Agrupamos isso em uma única alteração legível.
 EXPR_VARIANT_LABELS: Dict[str, str] = {
     "Literal": "literal",
-    "ThemeDataColor": "theme color",
-    "Aggregation": "aggregation",
-    "Column": "column",
-    "Measure": "measure",
-    "FillRule": "fill rule",
-    "Conditional": "conditional",
-    "SourceRef": "source",
-    "HierarchyLevel": "hierarchy level",
+    "ThemeDataColor": "cor do tema",
+    "Aggregation": "agregação",
+    "Column": "coluna",
+    "Measure": "medida",
+    "FillRule": "regra de preenchimento",
+    "Conditional": "condicional",
+    "SourceRef": "origem",
+    "HierarchyLevel": "nível de hierarquia",
 }
 
 
 def _summarize_expr_variant(variant: Any) -> Optional[str]:
-    """Render a one-line summary of a discriminated-union node like
-    {"Literal": {"Value": "'#43D674'"}} or {"ThemeDataColor": {"ColorId": 9}}."""
+    """Renderiza um resumo em uma linha de um nó discriminated-union como
+    {"Literal": {"Value": "'#43D674'"}} ou {"ThemeDataColor": {"ColorId": 9}}."""
     if not isinstance(variant, dict) or len(variant) != 1:
         return None
 
@@ -454,10 +461,10 @@ def _summarize_expr_variant(variant: Any) -> Optional[str]:
         if color_id is not None:
             bits.append(f"slot {color_id}")
         if percent not in (None, 0, 0.0):
-            bits.append(f"tint {percent}")
+            bits.append(f"tonalidade {percent}")
         if bits:
-            return f"theme color ({', '.join(bits)})"
-        return "theme color"
+            return f"cor do tema ({', '.join(bits)})"
+        return "cor do tema"
 
     return EXPR_VARIANT_LABELS.get(key, key)
 
@@ -465,8 +472,8 @@ def _summarize_expr_variant(variant: Any) -> Optional[str]:
 def _detect_expr_variant_swap(
     path: str, old: Any, new: Any
 ) -> Optional[str]:
-    """If old/new are both single-variant expression nodes with disjoint
-    variant keys, return a consolidated change message; else None."""
+    """Se old/new forem nós de expressão de variante única com chaves distintas,
+    retorna uma mensagem consolidada de alteração; caso contrário, None."""
     if not (isinstance(old, dict) and isinstance(new, dict)):
         return None
     if not (path.endswith(".expr")):
@@ -488,46 +495,45 @@ def _detect_expr_variant_swap(
         or humanize_path(parent_path)
         or "Expression"
     )
-    return f"{label} changed: {old_variant} -> {new_variant}"
+    return f"{label} alterado(a): {old_variant} -> {new_variant}"
 
 
 def describe_added(path: str, value: Any) -> str:
     friendly = _friendly_path_label(path)
     if friendly:
-        return f"Added {friendly}: {summarize_value(value)}"
+        return f"Adicionado {friendly}: {summarize_value(value)}"
 
     label = humanize_path(path)
     summary = summarize_pbip_value(path, value)
 
     if label and summary:
-        return f"Added {label}: {summary}"
+        return f"Adicionado {label}: {summary}"
     if label:
-        return f"Added {label}"
-    return f"Added property: {path} = {summarize_value(value)}"
+        return f"Adicionado {label}"
+    return f"Propriedade adicionada: {path} = {summarize_value(value)}"
 
 
 def describe_removed(path: str, old_value: Any) -> str:
     friendly = _friendly_path_label(path)
     if friendly:
-        return f"Removed {friendly}"
+        return f"Removido {friendly}"
 
     label = humanize_path(path)
     summary = summarize_pbip_value(path, old_value)
 
     if label and summary:
-        return f"Removed {label} (was: {summary})"
+        return f"Removido {label} (anterior: {summary})"
     if label:
-        return f"Removed {label}"
-    return f"Removed property: {path}"
+        return f"Removido {label}"
+    return f"Propriedade removida: {path}"
 
 
 def json_diff_summary(old: Any, new: Any, path: str = "") -> List[str]:
     changes: List[str] = []
 
-    # Numbers first: PBIP serializes the same value as int or float
-    # interchangeably (e.g. Percent 0 vs 0.0). Treat int/float as one kind —
-    # report only when the numeric value actually changed, and drop pure
-    # int<->float "type" noise entirely.
+    # Números primeiro: o PBIP serializa o mesmo valor como int ou float de forma
+    # intercambiável (ex: Percent 0 vs 0.0). Trata int/float como um único tipo —
+    # reporta apenas quando o valor numérico realmente mudar, eliminando ruído puro de tipo int<->float.
     old_num = isinstance(old, (int, float)) and not isinstance(old, bool)
     new_num = isinstance(new, (int, float)) and not isinstance(new, bool)
     if old_num and new_num:
@@ -536,14 +542,14 @@ def json_diff_summary(old: Any, new: Any, path: str = "") -> List[str]:
         return changes
 
     if type(old) is not type(new):
-        # Real type change (not numeric) — label it in friendly terms instead
-        # of dumping the raw JSON path.
+        # Alteração real de tipo (não numérica) — descreve em termos amigáveis
+        # em vez de exibir o caminho JSON bruto.
         label = _friendly_path_label(path) or humanize_path(path)
         if label:
-            changes.append(f"{label} changed")
+            changes.append(f"{label} alterado(a)")
         else:
             changes.append(
-                f"Changed type at {path}: {type(old).__name__} -> {type(new).__name__}"
+                f"Tipo alterado em {path}: {type(old).__name__} -> {type(new).__name__}"
             )
         return changes
 
@@ -599,49 +605,49 @@ def path_segments(path: str) -> List[str]:
     return [seg.lower() for seg in re.split(r"[.\[\]]+", path) if seg]
 
 
-# Conversational labels for common PBIP JSON paths. Each entry is
-# (regex matched against the full path, friendly label). First match wins.
+# Rótulos amigáveis para caminhos JSON comuns do PBIP. Cada entrada é
+# (regex comparado contra o caminho completo, rótulo amigável). Primeira correspondência vence.
 JSON_VALUE_PATTERNS: List[Tuple[re.Pattern, str]] = [
-    # Position and layout
-    (re.compile(r"^visual\.position\.x$"), "X position"),
-    (re.compile(r"^visual\.position\.y$"), "Y position"),
-    (re.compile(r"^visual\.position\.width$"), "Width"),
-    (re.compile(r"^visual\.position\.height$"), "Height"),
-    (re.compile(r"^visual\.position\.z$"), "Z-order"),
-    (re.compile(r"^visual\.position\.tabOrder$"), "Tab order"),
-    (re.compile(r"^visual\.visualType$"), "Visual type"),
-    (re.compile(r"^visual\.howCreated$"), "Visual creation source"),
-    # Page-level
-    (re.compile(r"^pageBindings\."), "Page binding"),
-    (re.compile(r"^width$"), "Page width"),
-    (re.compile(r"^height$"), "Page height"),
-    (re.compile(r"^displayOption$"), "Page display option"),
-    # Title text
-    (re.compile(r"\.title.*\.text\.expr\.Literal\.Value$"), "Title text"),
-    # Color slot in a theme
-    (re.compile(r"\.background.*\.ThemeDataColor\.ColorId$"), "Background theme color slot"),
-    (re.compile(r"\.background.*\.ThemeDataColor\.Percent$"), "Background color tint"),
-    (re.compile(r"\.background.*\.solid\.color$"), "Background color"),
-    (re.compile(r"\.fontColor.*\.ThemeDataColor\.ColorId$"), "Font theme color slot"),
-    (re.compile(r"\.fontColor.*\.solid\.color$"), "Font color"),
-    (re.compile(r"\.color.*\.ThemeDataColor\.ColorId$"), "Theme color slot"),
-    (re.compile(r"\.color.*\.ThemeDataColor\.Percent$"), "Color tint"),
-    (re.compile(r"\.color.*\.solid\.color$"), "Color"),
-    # Field/measure references
-    (re.compile(r"\.queryRef$"), "Field reference"),
-    (re.compile(r"\.nativeQueryRef$"), "Native field reference"),
-    (re.compile(r"\.Property$"), "Property reference"),
-    # Expressions
-    (re.compile(r"\.expression$"), "Expression"),
-    # Filter renames (filter.name is the filter identifier)
-    (re.compile(r"^filterConfig\.filters\[\d+\]\.name$"), "Filter target"),
-    (re.compile(r"\.visualContainerObjects\.title.*\.text\.expr\.Literal\.Value$"), "Container title text"),
+    # Posição e layout
+    (re.compile(r"^visual\.position\.x$"), "Posição X"),
+    (re.compile(r"^visual\.position\.y$"), "Posição Y"),
+    (re.compile(r"^visual\.position\.width$"), "Largura"),
+    (re.compile(r"^visual\.position\.height$"), "Altura"),
+    (re.compile(r"^visual\.position\.z$"), "Ordem Z (camada)"),
+    (re.compile(r"^visual\.position\.tabOrder$"), "Ordem de tabulação"),
+    (re.compile(r"^visual\.visualType$"), "Tipo de visual"),
+    (re.compile(r"^visual\.howCreated$"), "Origem de criação do visual"),
+    # Nível da página
+    (re.compile(r"^pageBindings\."), "Vínculo da página"),
+    (re.compile(r"^width$"), "Largura da página"),
+    (re.compile(r"^height$"), "Altura da página"),
+    (re.compile(r"^displayOption$"), "Opção de exibição da página"),
+    # Texto de título
+    (re.compile(r"\.title.*\.text\.expr\.Literal\.Value$"), "Texto do título"),
+    # Slot de cor em temas
+    (re.compile(r"\.background.*\.ThemeDataColor\.ColorId$"), "Slot de cor do tema do plano de fundo"),
+    (re.compile(r"\.background.*\.ThemeDataColor\.Percent$"), "Tonalidade do plano de fundo"),
+    (re.compile(r"\.background.*\.solid\.color$"), "Cor do plano de fundo"),
+    (re.compile(r"\.fontColor.*\.ThemeDataColor\.ColorId$"), "Slot de cor da fonte do tema"),
+    (re.compile(r"\.fontColor.*\.solid\.color$"), "Cor da fonte"),
+    (re.compile(r"\.color.*\.ThemeDataColor\.ColorId$"), "Slot de cor do tema"),
+    (re.compile(r"\.color.*\.ThemeDataColor\.Percent$"), "Tonalidade da cor"),
+    (re.compile(r"\.color.*\.solid\.color$"), "Cor"),
+    # Referências de campo/medida
+    (re.compile(r"\.queryRef$"), "Referência de campo"),
+    (re.compile(r"\.nativeQueryRef$"), "Referência nativa de campo"),
+    (re.compile(r"\.Property$"), "Referência de propriedade"),
+    # Expressões
+    (re.compile(r"\.expression$"), "Expressão"),
+    # Renomeação de filtros (filter.name é o identificador do filtro)
+    (re.compile(r"^filterConfig\.filters\[\d+\]\.name$"), "Alvo do filtro"),
+    (re.compile(r"\.visualContainerObjects\.title.*\.text\.expr\.Literal\.Value$"), "Texto do título do contêiner"),
 ]
 
 
 def classify_json_value_change(path: str, old: Any, new: Any) -> str:
     if path in {"visual.position.x", "visual.position.y", "position.x", "position.y"}:
-        return "Visual moved"
+        return "Visual movido"
 
     if path in {
         "visual.position.width",
@@ -649,14 +655,14 @@ def classify_json_value_change(path: str, old: Any, new: Any) -> str:
         "position.width",
         "position.height",
     }:
-        return "Visual resized"
+        return "Visual redimensionado"
 
     if re.search(r"\.background.*\.ThemeDataColor\.(ColorId|Percent)$", path):
-        return "Background color changed"
+        return "Cor do plano de fundo alterada"
 
     if path.endswith("activePageName"):
         return (
-            f"Default opening page changed: {resolve_page_name(old)} -> "
+            f"Página inicial padrão alterada: {resolve_page_name(old)} -> "
             f"{resolve_page_name(new)}"
         )
 
@@ -664,23 +670,23 @@ def classify_json_value_change(path: str, old: Any, new: Any) -> str:
         current_file = _LINK_CONTEXT.get("current_file", "")
         file_name = Path(current_file.replace("\\", "/")).name.lower()
         if file_name == "page.json":
-            return f'Page renamed: "{old}" -> "{new}"'
+            return f'Página renomeada: "{old}" -> "{new}"'
         if file_name == "visual.json":
-            return f'Visual title changed: "{old}" -> "{new}"'
+            return f'Título do visual alterado: "{old}" -> "{new}"'
 
     if path == "name" or path.endswith(".name"):
-        # Bare 'name' field is usually a hash ID — skip the noisy translation.
+        # O campo 'name' puro normalmente é um ID de hash — pula a tradução ruidosa.
         pass
 
     for pattern, friendly in JSON_VALUE_PATTERNS:
         if pattern.search(path):
-            return f"{friendly} changed: {old} -> {new}"
+            return f"{friendly} alterado(a): {old} -> {new}"
 
     label = humanize_path(path)
     if label:
-        return f"{label} changed: {old} -> {new}"
+        return f"{label} alterado(a): {old} -> {new}"
 
-    return f"Value changed at {path}: {old} -> {new}"
+    return f"Valor alterado em {path}: {old} -> {new}"
 
 
 def load_pbip_metadata(root: Path) -> Dict[str, Dict[str, str]]:
@@ -779,8 +785,8 @@ def extract_title_from_objects(objects: Any) -> Optional[str]:
 
 
 def describe_pbip_path(path: str, metadata: Dict[str, Dict[str, str]]) -> str:
-    """Short context label like 'page "foo"' or 'visual "bar" on page "foo"';
-    falls back to the bare filename when no metadata matches."""
+    """Rótulo de contexto curto como 'página "foo"' ou 'visual "bar" na página "foo"';
+    recorre ao nome simples do arquivo quando nenhum metadado coincide."""
     normalized_path = path.replace("\\", "/")
 
     page_label = None
@@ -797,9 +803,9 @@ def describe_pbip_path(path: str, metadata: Dict[str, Dict[str, str]]) -> str:
             break
 
     if visual_label and page_label:
-        return f'visual "{visual_label}" on page "{page_label}"'
+        return f'visual "{visual_label}" na página "{page_label}"'
     if page_label:
-        return f'page "{page_label}"'
+        return f'página "{page_label}"'
     if visual_label:
         return f'visual "{visual_label}"'
 
@@ -807,7 +813,7 @@ def describe_pbip_path(path: str, metadata: Dict[str, Dict[str, str]]) -> str:
 
 
 def extract_textbox_text(data: Any) -> Optional[str]:
-    """Walk a visual.json looking for textbox paragraph runs."""
+    """Percorre visual.json procurando por blocos de texto (textRuns) de caixas de texto."""
     if not isinstance(data, dict):
         return None
 
@@ -844,14 +850,14 @@ def extract_textbox_text(data: Any) -> Optional[str]:
 def describe_new_file_entity(
     path: str, content: str, metadata: Dict[str, Dict[str, str]]
 ) -> str:
-    """Friendlier prose for a brand-new PBIP file in the 'New' section."""
+    """Descrição legível para um novo arquivo PBIP na seção de 'Itens Adicionados'."""
     normalized_path = path.replace("\\", "/")
     file_name = Path(normalized_path).name.lower()
 
     parsed = try_parse_json(content) if file_name.endswith(".json") else None
 
     if file_name == "visual.json" and isinstance(parsed, dict):
-        visual_name = extract_visual_display_name(parsed) or "(unnamed)"
+        visual_name = extract_visual_display_name(parsed) or "(sem nome)"
         page_label = None
         for page_path, page_name in metadata["pages"].items():
             if normalized_path.startswith(page_path + "/"):
@@ -862,23 +868,23 @@ def describe_new_file_entity(
         snippet = ""
         if textbox_text:
             preview = textbox_text if len(textbox_text) <= 80 else textbox_text[:77] + "..."
-            snippet = f' — text: "{preview}"'
+            snippet = f' — texto: "{preview}"'
 
         if page_label:
-            return f'New visual "{visual_name}" on page "{page_label}"{snippet}'
-        return f'New visual "{visual_name}"{snippet}'
+            return f'Novo visual "{visual_name}" na página "{page_label}"{snippet}'
+        return f'Novo visual "{visual_name}"{snippet}'
 
     if file_name == "page.json" and isinstance(parsed, dict):
-        page_name = parsed.get("displayName") or parsed.get("name") or "(unnamed)"
-        return f'New page "{page_name}"'
+        page_name = parsed.get("displayName") or parsed.get("name") or "(sem nome)"
+        return f'Nova página "{page_name}"'
 
     if file_name.endswith(".tmdl"):
-        return f"New TMDL file: `{Path(normalized_path).name}`"
+        return f"Novo arquivo TMDL: `{Path(normalized_path).name}`"
 
     if file_name.endswith((".m", ".pqm")):
-        return f"New Power Query file: `{Path(normalized_path).name}`"
+        return f"Novo arquivo Power Query: `{Path(normalized_path).name}`"
 
-    return f"New file: `{Path(normalized_path).name}`"
+    return f"Novo arquivo: `{Path(normalized_path).name}`"
 
 
 def normalize_text(text: str) -> str:
@@ -901,7 +907,7 @@ def describe_database_tmdl_change(old_text: str, new_text: str) -> Optional[str]
     new_match = re.search(r"^\s*compatibilityLevel:\s*(\d+)\s*$", new_text, re.MULTILINE)
     if old_match and new_match and old_match.group(1) != new_match.group(1):
         return (
-            "Semantic model compatibility level changed: "
+            "Nível de compatibilidade do modelo semântico alterado: "
             f"{old_match.group(1)} -> {new_match.group(1)}"
         )
     return None
@@ -943,9 +949,9 @@ def clean_tmdl_key(key: str) -> str:
 
 
 def extract_tmdl_expression(body: str) -> Optional[str]:
-    """Pull the expression that follows '=' on a TMDL header line.
-    Handles single-line ('measure foo = SUM(x)') and triple-backtick
-    multi-line forms. Returns None if there's no expression."""
+    """Extrai a expressão que segue '=' na linha de cabeçalho do TMDL.
+    Suporta formato em linha única ('measure foo = SUM(x)') e blocos multilinha
+    com crases triplas. Retorna None se não houver expressão."""
     lines = body.splitlines()
     for i, line in enumerate(lines):
         eq_idx = line.find("=")
@@ -959,17 +965,17 @@ def extract_tmdl_expression(body: str) -> Optional[str]:
                     break
                 collected.append(follow)
             indent = min(
-                (len(l) - len(l.lstrip()) for l in collected if l.strip()),
+                (len(line_text) - len(line_text.lstrip()) for line_text in collected if line_text.strip()),
                 default=0,
             )
-            return "\n".join(l[indent:] for l in collected).strip() or None
+            return "\n".join(line_text[indent:] for line_text in collected).strip() or None
         return rest or None
     return None
 
 
 def fenced_block(language: str, content: str, indent: str = "  ") -> str:
-    """Multi-line code block where every line carries `indent`, so it
-    nests cleanly under a markdown bullet without breaking out."""
+    """Bloco de código multilinha onde cada linha contém `indent`, para
+    aninhamento correto sob um item de lista markdown sem quebrar a estrutura."""
     out = [f"{indent}```{language}"]
     for line in content.split("\n"):
         out.append(f"{indent}{line}" if line else indent.rstrip())
@@ -978,9 +984,9 @@ def fenced_block(language: str, content: str, indent: str = "  ") -> str:
 
 
 def extract_tmdl_objects(text: str) -> Dict[str, Tuple[str, str]]:
-    """Walk TMDL line-by-line tracking indentation. Returns
-    {full_key: (leaf_type, body)} where full_key chains parent context
-    (e.g. 'table foo > measure bar')."""
+    """Percorre o TMDL linha a linha rastreando a indentação. Retorna
+    {full_key: (leaf_type, body)} onde full_key encadeia o contexto pai
+    (ex: 'table foo > measure bar')."""
     objects: Dict[str, Tuple[str, str]] = {}
     lines = text.splitlines()
 
@@ -1035,9 +1041,9 @@ def extract_tmdl_objects(text: str) -> Dict[str, Tuple[str, str]]:
 
 
 def filter_top_level_keys(keys: set) -> set:
-    """Drop keys whose parent is also in the set; avoids reporting child
-    annotations/columns separately when their containing measure/table is
-    being added or removed wholesale."""
+    """Descarta chaves cujo pai também esteja no conjunto; evita relatar anotações
+    ou colunas filhas separadamente quando a medida ou tabela inteira estiver sendo
+    adicionada ou removida por completo."""
     keys = {key for key in keys if "annotation PBIDesktopVersion" not in key}
     sorted_keys = sorted(keys, key=len)
     kept: List[str] = []
@@ -1050,7 +1056,7 @@ def filter_top_level_keys(keys: set) -> set:
 
 def tmdl_object_description(verb: str, leaf_type: str, key: str, expression: Optional[str]) -> str:
     cleaned = clean_tmdl_key(key)
-    head = f"{verb} TMDL {leaf_type}: `{cleaned}`"
+    head = f"{verb} objeto TMDL {leaf_type}: `{cleaned}`"
     if expression is None:
         return head
     language = "dax" if leaf_type.lower() == "measure" else "m" if leaf_type.lower() == "partition" else ""
@@ -1059,14 +1065,14 @@ def tmdl_object_description(verb: str, leaf_type: str, key: str, expression: Opt
     return f"{head}\n{fenced_block(language, expression)}"
 
 
-# When more than this many same-type siblings (e.g. columns on one table) are
-# added/removed/changed together, collapse them into one summarized line instead
-# of a bullet per object — a table gaining 100 columns must not flood the summary.
+# Quando mais que este número de irmãos do mesmo tipo (ex: colunas em uma tabela) forem
+# adicionados/removidos/alterados em conjunto, condensa-os em uma única linha sumarizada
+# em vez de um bullet por objeto — uma tabela recebendo 100 colunas não deve poluir o resumo.
 _TMDL_ROLLUP_THRESHOLD = 6
 
 
 def _tmdl_leaf_parts(key: str):
-    """(parent_key, leaf_name) for a TMDL key like 'table X > column Y'."""
+    """(chave_pai, nome_folha) para uma chave TMDL como 'table X > column Y'."""
     if " > " in key:
         parent, last = key.rsplit(" > ", 1)
     else:
@@ -1078,19 +1084,19 @@ def _tmdl_leaf_parts(key: str):
 
 def _rollup_tmdl_group(verb: str, leaf_type: str, parent: str, names: List[str]) -> str:
     plural = leaf_type if leaf_type.endswith("s") else f"{leaf_type}s"
-    where = f" in {clean_tmdl_key(parent)}" if parent else ""
+    where = f" em {clean_tmdl_key(parent)}" if parent else ""
     preview = ", ".join(names[:8])
-    more = f" (+{len(names) - 8} more)" if len(names) > 8 else ""
-    return f"{verb} {len(names)} {plural}{where}: {preview}{more}"
+    more = f" (+{len(names) - 8} outros)" if len(names) > 8 else ""
+    return f"{verb}: {len(names)} {plural}{where}: {preview}{more}"
 
 
 def _group_tmdl_keys(keys):
-    """Group keys by (parent, leaf_type), preserving sorted order."""
+    """Agrupa chaves por (pai, tipo_folha), preservando a ordem de classificação."""
     groups: Dict[tuple, List[str]] = {}
     order: List[tuple] = []
     for key in sorted(keys):
         parent, _ = _tmdl_leaf_parts(key)
-        # leaf_type is the first word of the last segment (column/measure/...)
+        # leaf_type é a primeira palavra do último segmento (column/measure/...)
         last = key.rsplit(" > ", 1)[-1]
         leaf_type = last.split(" ", 1)[0]
         gkey = (parent, leaf_type)
@@ -1132,10 +1138,10 @@ def compare_tmdl(old_text: str, new_text: str) -> Dict[str, List[str]]:
     added_keys = filter_top_level_keys(new_keys - old_keys)
     removed_keys = filter_top_level_keys(old_keys - new_keys)
 
-    result["added"] = _describe_added_removed("New", added_keys, new_objects)
-    result["removed"] = _describe_added_removed("Removed", removed_keys, old_objects)
+    result["added"] = _describe_added_removed("Novo", added_keys, new_objects)
+    result["removed"] = _describe_added_removed("Removido", removed_keys, old_objects)
 
-    # --- modified: build detailed line per object, then roll up bulk groups ---
+    # --- modificados: gera linha detalhada por objeto, agrupando depois em blocos ---
     changed_keys = [
         key for key in (old_keys & new_keys)
         if normalize_tmdl_text(old_objects[key][1]) != normalize_tmdl_text(new_objects[key][1])
@@ -1146,14 +1152,15 @@ def compare_tmdl(old_text: str, new_text: str) -> Dict[str, List[str]]:
         _, old_body = old_objects[key]
         cleaned = clean_tmdl_key(key)
         old_expr = extract_tmdl_expression(old_body)
-        new_expr = extract_tmdl_expression(new_body)
-        if new_leaf.lower() in ("measure", "partition") and old_expr is not None and new_expr is not None and old_expr != new_expr:
+        is_expr_leaf = new_leaf.lower() in ("measure", "partition")
+        has_expr_change = old_expr is not None and new_expr is not None and old_expr != new_expr
+        if is_expr_leaf and has_expr_change:
             language = "dax" if new_leaf.lower() == "measure" else "m"
-            label = "DAX measure" if new_leaf.lower() == "measure" else "Power Query partition"
+            label = "Medida DAX" if new_leaf.lower() == "measure" else "Partição do Power Query"
             detailed[key] = (
-                f"{label} changed: `{cleaned}`\n"
-                f"  Before:\n{fenced_block(language, old_expr, '    ')}\n"
-                f"  After:\n{fenced_block(language, new_expr, '    ')}"
+                f"{label} alterada: `{cleaned}`\n"
+                f"  Antes:\n{fenced_block(language, old_expr, '    ')}\n"
+                f"  Depois:\n{fenced_block(language, new_expr, '    ')}"
             )
         else:
             detailed[key] = classify_tmdl_object_change(key, new_leaf, old_body, new_body)
@@ -1164,13 +1171,13 @@ def compare_tmdl(old_text: str, new_text: str) -> Dict[str, List[str]]:
         parent, leaf_type = gkey
         if len(members) > _TMDL_ROLLUP_THRESHOLD:
             names = [_tmdl_leaf_parts(k)[1] for k in members]
-            result["modified"].append(_rollup_tmdl_group("Changed", leaf_type, parent, names))
+            result["modified"].append(_rollup_tmdl_group("Alterados", leaf_type, parent, names))
         else:
             for key in members:
                 result["modified"].append(detailed[key])
 
     if not any(result.values()) and normalize_tmdl_text(old_text) != normalize_tmdl_text(new_text):
-        result["modified"].append("TMDL file changed")
+        result["modified"].append("Arquivo TMDL alterado")
 
     return result
 
@@ -1181,32 +1188,32 @@ def classify_tmdl_object_change(
     leaf = leaf_type.lower()
 
     if leaf == "measure":
-        return f"DAX measure changed: {key}"
+        return f"Medida DAX alterada: {key}"
 
     if leaf == "partition":
-        return f"Power Query partition changed: {key}"
+        return f"Partição do Power Query alterada: {key}"
 
     if leaf == "relationship":
-        return f"Relationship changed: {key}"
+        return f"Relacionamento alterado: {key}"
 
     if leaf == "column":
-        return f"Column definition changed: {key}"
+        return f"Definição de coluna alterada: {key}"
 
     if leaf == "table":
-        return f"Table definition changed: {key}"
+        return f"Definição de tabela alterada: {key}"
 
     if leaf == "calculationgroup":
-        return f"Calculation group changed: {key}"
+        return f"Grupo de cálculo alterado: {key}"
 
-    return f"TMDL {leaf_type} changed: {key}"
+    return f"Objeto TMDL {leaf_type} alterado: {key}"
 
 
 # === M / Power Query ===
 
 
 def strip_m_strings_and_comments(text: str) -> str:
-    """Replace string literals and comments with spaces of equal length so
-    later depth/identifier scans see correct offsets but no syntactic noise."""
+    """Substitui literais de string e comentários por espaços de mesmo comprimento
+    para que varreduras posteriores de profundidade e identificadores vejam offsets corretos sem ruído sintático."""
     out: List[str] = []
     i = 0
     n = len(text)
@@ -1256,8 +1263,8 @@ def strip_m_strings_and_comments(text: str) -> str:
 
 
 def split_m_top_level_commas(text: str) -> List[str]:
-    """Split a let-body fragment on commas that are outside parens/brackets/braces
-    AND outside nested `let ... in` blocks."""
+    """Divide um fragmento de corpo 'let' nas vírgulas que estão fora de parênteses/colchetes/chaves
+    E fora de blocos `let ... in` aninhados."""
     parts: List[str] = []
     depth = 0
     nested_lets = 0
@@ -1312,8 +1319,8 @@ def _word_at(text: str, i: int, word: str) -> bool:
 
 
 def extract_m_steps(text: str) -> Dict[str, str]:
-    """Extract steps from a `let ... in` M block as {step_name: step_body}.
-    Handles nested let blocks, parens, comments, and strings."""
+    """Extrai etapas de um bloco M `let ... in` como {nome_etapa: corpo_etapa}.
+    Trata blocos let aninhados, parênteses, comentários e strings."""
     sanitized = strip_m_strings_and_comments(text)
 
     let_pos = -1
@@ -1403,12 +1410,12 @@ def compare_m_code(old_text: str, new_text: str) -> Dict[str, List[str]]:
 
     for key in sorted(new_keys - old_keys):
         result["added"].append(
-            f"New Power Query step: `{key}`\n{fenced_block('m', new_steps[key])}"
+            f"Nova etapa do Power Query: `{key}`\n{fenced_block('m', new_steps[key])}"
         )
 
     for key in sorted(old_keys - new_keys):
         result["removed"].append(
-            f"Removed Power Query step: `{key}`\n{fenced_block('m', old_steps[key])}"
+            f"Etapa do Power Query removida: `{key}`\n{fenced_block('m', old_steps[key])}"
         )
 
     for key in sorted(old_keys & new_keys):
@@ -1416,12 +1423,12 @@ def compare_m_code(old_text: str, new_text: str) -> Dict[str, List[str]]:
             classification = classify_m_step_change(key, old_steps[key], new_steps[key])
             result["modified"].append(
                 f"{classification}\n"
-                f"  Before:\n{fenced_block('m', old_steps[key], '    ')}\n"
-                f"  After:\n{fenced_block('m', new_steps[key], '    ')}"
+                f"  Antes:\n{fenced_block('m', old_steps[key], '    ')}\n"
+                f"  Depois:\n{fenced_block('m', new_steps[key], '    ')}"
             )
 
     if not any(result.values()) and normalize_text(old_text) != normalize_text(new_text):
-        result["modified"].append("Power Query code changed")
+        result["modified"].append("Código Power Query alterado")
 
     return result
 
@@ -1430,33 +1437,33 @@ def classify_m_step_change(step_name: str, old_body: str, new_body: str) -> str:
     combined = f"{step_name} {old_body} {new_body}".lower()
 
     if "table.selectrows" in combined:
-        return f"Filter logic changed in Power Query step: {step_name}"
+        return f"Lógica de filtro alterada na etapa do Power Query: {step_name}"
 
     if "table.renamecolumns" in combined:
-        return f"Column rename logic changed in Power Query step: {step_name}"
+        return f"Lógica de renomeação de coluna alterada na etapa do Power Query: {step_name}"
 
     if "table.removecolumns" in combined:
-        return f"Removed columns logic changed in Power Query step: {step_name}"
+        return f"Lógica de remoção de colunas alterada na etapa do Power Query: {step_name}"
 
     if "table.selectcolumns" in combined:
-        return f"Selected columns logic changed in Power Query step: {step_name}"
+        return f"Lógica de seleção de colunas alterada na etapa do Power Query: {step_name}"
 
     if "table.transformcolumntypes" in combined:
-        return f"Column type logic changed in Power Query step: {step_name}"
+        return f"Lógica de tipagem de coluna alterada na etapa do Power Query: {step_name}"
 
     if "table.addcolumn" in combined:
-        return f"Added column logic changed in Power Query step: {step_name}"
+        return f"Lógica de adição de coluna alterada na etapa do Power Query: {step_name}"
 
     if "table.nestedjoin" in combined or "table.join" in combined:
-        return f"Join logic changed in Power Query step: {step_name}"
+        return f"Lógica de mesclagem (Join) alterada na etapa do Power Query: {step_name}"
 
     if "table.groupby" in combined:
-        return f"Group by logic changed in Power Query step: {step_name}"
+        return f"Lógica de agrupamento (Group By) alterada na etapa do Power Query: {step_name}"
 
     if "snowflake" in combined or "sql.database" in combined or "odata.feed" in combined:
-        return f"Source connection changed in Power Query step: {step_name}"
+        return f"Conexão de origem alterada na etapa do Power Query: {step_name}"
 
-    return f"Power Query step changed: {step_name}"
+    return f"Etapa do Power Query alterada: {step_name}"
 
 
 def classify_text_change(file_path: str, old_text: str, new_text: str) -> Dict[str, List[str]]:
@@ -1487,21 +1494,21 @@ def classify_text_change(file_path: str, old_text: str, new_text: str) -> Dict[s
         if lower_path.endswith((".m", ".pqm")):
             return compare_m_code(old_text, new_text)
 
-        return {"added": [], "removed": [], "modified": ["Text file changed"]}
+        return {"added": [], "removed": [], "modified": ["Arquivo de texto alterado"]}
     finally:
         _LINK_CONTEXT["current_file"] = ""
 
 
-# === New / Deleted roll-up ===================================================
-# A brand-new report drops hundreds of files into the diff. Listing each one
-# (every visual, bookmark, theme, TMDL table) buries the signal. Instead we roll
-# up to the notable level: a whole new report -> one line (+ its page names), a
-# new page -> one line (no per-visual detail), supporting files -> a count.
+# === Agrupamento de Novos / Excluídos =========================================
+# Um relatório totalmente novo adiciona centenas de arquivos ao diff. Listar cada um
+# (cada visual, bookmark, tema, tabela TMDL) esconde o sinal relevante. Em vez disso,
+# agrupamos no nível significativo: relatório novo -> uma linha (+ nomes das páginas),
+# página nova -> uma linha (sem detalhes por visual), arquivos de suporte -> contagem.
 
 
 def _project_root_of(path: str) -> Optional[str]:
-    """Return the path up to and including the first `*.Report` / `*.SemanticModel`
-    segment, or None if the path isn't inside a PBIP project."""
+    """Retorna o caminho até o primeiro segmento `*.Report` / `*.SemanticModel` (inclusive),
+    ou None caso o caminho não esteja dentro de um projeto PBIP."""
     acc: List[str] = []
     for seg in path.split("/"):
         acc.append(seg)
@@ -1519,8 +1526,8 @@ def _project_display_name(root: str) -> str:
 
 
 def _page_folder_of(path: str) -> Optional[str]:
-    """`.../pages/<id>` for a page.json or one of its visuals; None otherwise.
-    The trailing slash requirement excludes `.../pages/pages.json`."""
+    """`.../pages/<id>` para um page.json ou um de seus visuais; None caso contrário.
+    A barra final exclui `.../pages/pages.json`."""
     match = re.search(r"^(.*/pages/[^/]+)/", path)
     return match.group(1) if match else None
 
@@ -1572,7 +1579,7 @@ def _dedupe_preserve_order(entries: List[str]) -> List[str]:
 
 
 def _rollup_auto_date_table_changes(entries: List[str]) -> List[str]:
-    """Collapse Power BI auto date table churn into one reviewer-friendly line."""
+    """Agrupa alterações repetitivas de tabelas de data automáticas em uma linha amigável."""
     table_names = set()
     matched_indexes = set()
     pattern = re.compile(
@@ -1598,8 +1605,8 @@ def _rollup_auto_date_table_changes(entries: List[str]) -> List[str]:
             continue
         if not inserted:
             rolled_up.append(
-                "- Auto date table definitions refreshed "
-                f"({len(table_names)} generated table(s))"
+                "- Definições de tabelas de data automáticas atualizadas "
+                f"({len(table_names)} tabela(s) gerada(s))"
             )
             inserted = True
 
@@ -1609,10 +1616,10 @@ def _rollup_auto_date_table_changes(entries: List[str]) -> List[str]:
 def rollup_new_or_deleted(
     paths: set, files: Dict[str, str], counterpart: set, *, new: bool
 ) -> List[str]:
-    """Collapse a set of wholly added/removed files into notable bullets."""
-    verb = "New" if new else "Deleted"
-    page_verb = "New page" if new else "Removed page"
-    word = "added" if new else "removed"
+    """Agrupa um conjunto de arquivos inteiramente adicionados/removidos em tópicos resumidos."""
+    verb = "Novo" if new else "Excluído"
+    page_verb = "Nova página" if new else "Página removida"
+    word = "adicionado(s)" if new else "removido(s)"
     lines: List[str] = []
 
     by_project: Dict[str, List[str]] = {}
@@ -1630,27 +1637,27 @@ def rollup_new_or_deleted(
         is_model = root.endswith(".SemanticModel")
         wholly = not any(c == root or c.startswith(root + "/") for c in counterpart)
 
-        # --- entire project added / removed -> one headline line ---
+        # --- projeto inteiro adicionado / removido -> uma única linha de destaque ---
         if wholly:
             link = file_link(_pick_link_path(proj_paths))
             if is_model:
                 tables = _table_names(proj_paths)
-                lines.append(f"- {verb} semantic model: **{name}**{link}")
+                lines.append(f"- {verb} modelo semântico: **{name}**{link}")
                 if tables:
-                    lines.append(f"  - {len(tables)} table(s): {_join_names(tables)}")
+                    lines.append(f"  - {len(tables)} tabela(s): {_join_names(tables)}")
             else:
                 pages = [
-                    _page_name_for(p[: -len("/page.json")], files) or "(unnamed)"
+                    _page_name_for(p[: -len("/page.json")], files) or "(sem nome)"
                     for p in proj_paths
                     if p.endswith("/page.json")
                 ]
                 badge = "🆕 " if new else ""
-                lines.append(f"- {badge}{verb} report: **{name}**{link}")
+                lines.append(f"- {badge}{verb} relatório: **{name}**{link}")
                 if pages:
-                    lines.append(f"  - {len(pages)} page(s): {_join_names(sorted(pages))}")
+                    lines.append(f"  - {len(pages)} página(s): {_join_names(sorted(pages))}")
             continue
 
-        # --- project exists on both sides: summarize at page / table level ---
+        # --- projeto existe em ambos os lados: sumariza por página / tabela ---
         page_groups: Dict[str, List[str]] = {}
         others: List[str] = []
         for p in proj_paths:
@@ -1669,24 +1676,24 @@ def rollup_new_or_deleted(
                 visuals = [p for p in page_groups[pf] if p.endswith("visual.json")]
                 if visuals:
                     lines.append(
-                        f'- Page "{pname}": {len(visuals)} visual(s) {word}'
+                        f'- Página "{pname}": {len(visuals)} visual(is) {word}'
                         f'{file_link(pf + "/page.json")}'
                     )
 
         if is_model:
             for t in _table_names(others):
-                lines.append(f"- {verb} table: `{t}`")
+                lines.append(f"- {verb} tabela: `{t}`")
             rest = [p for p in others if not re.search(r"/tables/[^/]+\.tmdl$", p)]
             if rest:
-                lines.append(f"- {len(rest)} model definition file(s) {word}")
+                lines.append(f"- {len(rest)} arquivo(s) de definição do modelo {word}")
         elif others:
             lines.append(
-                f"- {len(others)} supporting file(s) {word} "
-                f"(bookmarks, theme, resources){file_link(sorted(others)[0])}"
+                f"- {len(others)} arquivo(s) de suporte {word} "
+                f"(indicadores, tema, recursos){file_link(sorted(others)[0])}"
             )
 
     for p in sorted(loose):
-        lines.append(f"- {verb} file: `{Path(p).name}`{file_link(p)}")
+        lines.append(f"- {verb} arquivo: `{Path(p).name}`{file_link(p)}")
 
     return lines
 
@@ -1743,23 +1750,23 @@ def compare_projects(old_root: Path, new_root: Path) -> str:
                 else:
                     section.append(f"- {entry} (in {context}){link}")
             if len(entries) > 80:
-                section.append(f"- Additional changes hidden: {len(entries) - 80} (in {context}){link}")
+                section.append(f"- Alterações adicionais ocultadas: {len(entries) - 80} (em {context}){link}")
 
-    lines: List[str] = ["# PBIP Change Summary", ""]
+    lines: List[str] = ["# Resumo de Alterações PBIP", ""]
 
     if new_section:
-        lines.append("## New")
+        lines.append("## Itens Adicionados")
         lines.extend(new_section)
         lines.append("")
 
     if deleted_section:
-        lines.append("## Deleted")
+        lines.append("## Itens Removidos")
         lines.extend(deleted_section)
         lines.append("")
 
     if modified_section:
         modified_section = _rollup_auto_date_table_changes(modified_section)
-        lines.append("## Modified")
+        lines.append("## Itens Modificados")
         lines.extend(modified_section)
 
     return "\n".join(lines)
@@ -1767,19 +1774,19 @@ def compare_projects(old_root: Path, new_root: Path) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Create a readable PBIP change summary."
+        description="Gera um resumo legível e detalhado das alterações em projetos PBIP."
     )
 
-    parser.add_argument("--old", required=True, help="Path to the old PBIP folder.")
-    parser.add_argument("--new", required=True, help="Path to the new PBIP folder.")
+    parser.add_argument("--old", required=True, help="Caminho para a pasta PBIP antiga (base).")
+    parser.add_argument("--new", required=True, help="Caminho para a pasta PBIP nova (head).")
     parser.add_argument(
         "--output",
         default="pbip_change_summary.md",
-        help="Output markdown file.",
+        help="Caminho do arquivo markdown de saída.",
     )
-    parser.add_argument("--repo-url", default="", help="GitHub repo URL for file links.")
-    parser.add_argument("--head-sha", default="", help="PR head commit SHA for file links.")
-    parser.add_argument("--pr-number", default="", help="PR number for diff anchors.")
+    parser.add_argument("--repo-url", default="", help="URL do repositório no GitHub para links de arquivos.")
+    parser.add_argument("--head-sha", default="", help="SHA do commit head do PR para links de arquivos.")
+    parser.add_argument("--pr-number", default="", help="Número do PR para âncoras de diff.")
 
     args = parser.parse_args()
 
@@ -1788,10 +1795,10 @@ def main() -> int:
 
     for label, root in (("--old", old_root), ("--new", new_root)):
         if not root.exists():
-            print(f"error: {label} path does not exist: {root}", file=sys.stderr)
+            print(f"erro: o caminho {label} não existe: {root}", file=sys.stderr)
             return 2
         if not root.is_dir():
-            print(f"error: {label} path is not a directory: {root}", file=sys.stderr)
+            print(f"erro: o caminho {label} não é um diretório: {root}", file=sys.stderr)
             return 2
 
     _LINK_CONTEXT["repo_url"] = args.repo_url
@@ -1803,7 +1810,7 @@ def main() -> int:
     output_path = Path(args.output)
     output_path.write_text(summary, encoding="utf-8")
 
-    print(f"Summary created: {output_path}")
+    print(f"Resumo criado com sucesso: {output_path}")
     return 0
 
 
