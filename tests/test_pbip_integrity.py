@@ -2,7 +2,7 @@
 Suíte de Testes de Integridade PBIP & TMDL (Fabric Semantic Model & Report Authoring)
 
 Proposta:
-Valida a integridade sintática e semântica dos arquivos do projeto Power BI (PBIP) Isolacao Motores,
+Valida a integridade sintática e semântica dos arquivos do projeto Power BI (PBIP),
 garantindo que alterações em arquivos TMDL e PBIR respeitem as diretrizes oficiais
 das skills `powerbi-report-authoring` e `semantic-model-authoring`.
 
@@ -24,8 +24,18 @@ import os
 import re
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SEMANTIC_MODEL_DIR = os.path.join(BASE_DIR, "isolacao.SemanticModel")
-REPORT_DIR = os.path.join(BASE_DIR, "isolacao.Report")
+
+
+def _find_pbip_dir(suffix: str) -> str:
+    """Localiza o diretório do componente PBIP (.SemanticModel ou .Report) na raiz do repositório."""
+    for entry in sorted(os.listdir(BASE_DIR)):
+        if entry.endswith(suffix) and os.path.isdir(os.path.join(BASE_DIR, entry)):
+            return os.path.join(BASE_DIR, entry)
+    return os.path.join(BASE_DIR, f"default{suffix}")
+
+
+SEMANTIC_MODEL_DIR = _find_pbip_dir(".SemanticModel")
+REPORT_DIR = _find_pbip_dir(".Report")
 
 GIT_CONFLICT_PATTERN = re.compile(r"^(<{7}\s|={7}\s*$|>{7}\s)", re.MULTILINE)
 
